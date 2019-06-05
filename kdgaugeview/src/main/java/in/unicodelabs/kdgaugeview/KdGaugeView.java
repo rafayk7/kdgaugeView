@@ -1,4 +1,4 @@
-package in.unicodelabs.kdgaugeview;
+package com.rkalim.libraries;
 
 import android.animation.FloatEvaluator;
 import android.animation.ValueAnimator;
@@ -14,9 +14,11 @@ import android.os.Build;
 import android.text.TextUtils;
 import android.util.AttributeSet;
 import android.util.DisplayMetrics;
+import android.util.Log;
 import android.util.TypedValue;
 import android.view.View;
 import android.view.animation.DecelerateInterpolator;
+import com.rkalim.digifloor.R;
 
 
 public class KdGaugeView extends View {
@@ -51,10 +53,11 @@ public class KdGaugeView extends View {
     private int speedUnitTextColor = Color.BLACK;
     private int speedLimitTexteColor = Color.BLACK;
 
+    private int[] colors;
+    private float[] changeValues;
 
     private RectF progressBarRect = new RectF();
-
-
+    
     private float mProgressBarCircleRadius;
     private float mDotedCircleRadius;
 
@@ -100,6 +103,7 @@ public class KdGaugeView extends View {
         if (TextUtils.isEmpty(unitOfMeasurement)) unitOfMeasurement = "Km/Hr";
 
 
+
         mSpeedTextSize = a.getDimension(R.styleable.kdgaugeview_speedTextSize, TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 100, getDisplayMetrics()));
         mSpeedUnitTextSize = a.getDimension(R.styleable.kdgaugeview_unitOfMeasurementTextSize, TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 30, getDisplayMetrics()));
         mSpeedLimitTextSize = a.getDimension(R.styleable.kdgaugeview_speedLimitTextSize, TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 15, getDisplayMetrics()));
@@ -128,11 +132,11 @@ public class KdGaugeView extends View {
         mBigDotCirclePaint.setStyle(Paint.Style.FILL);
 
         mAlertDotCirclePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        mAlertDotCirclePaint.setColor(dialSpeedAlertColor);
+        mAlertDotCirclePaint.setColor(dialSpeedColor);
         mAlertDotCirclePaint.setStyle(Paint.Style.FILL);
 
         mProgressBarPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        mProgressBarPaint.setColor(dialSpeedColor);
+        mProgressBarPaint.setColor(dialSpeedAlertColor);
         mProgressBarPaint.setStyle(Paint.Style.STROKE);
         mProgressBarPaint.setStrokeWidth(speedDialRingWidth);
 
@@ -155,9 +159,7 @@ public class KdGaugeView extends View {
         mSpeedLimitTextPaint.setStyle(Paint.Style.FILL);
         mSpeedLimitTextPaint.setTextAlign(Paint.Align.LEFT);
         mSpeedLimitTextPaint.setTextSize(mSpeedLimitTextSize);
-
         mPerDegreeSpeed = (mMaxSpeed - mMinSpeed) / 270;
-
         a.recycle();
     }
 
@@ -259,18 +261,36 @@ public class KdGaugeView extends View {
 
 
         //Draw Speed Progress
-        float speedAngle = mCurrentSpeed / mPerDegreeSpeed;
 
-        if (speedAngle <= alertSpeedAngle) {
-            mProgressBarPaint.setColor(dialSpeedColor);
-            canvas.drawArc(progressBarRect, 0, speedAngle, false, mProgressBarPaint);
+        if(changeValues.length>0 && colors.length>0){
+            
+            if(changeValues.length!=colors.length){
+                
+            }
+            
+            float[] changeAngles = new float[changeValues.length];
+
+            for(int i=0; i<changeValues.length; i++) {
+                changeAngles[i] = changeValues[i]/ mPerDegreeSpeed;
+            }
+
+            initMultiColor(canvas, colors, changeAngles);
         } else {
+            float speedAngle = mCurrentSpeed / mPerDegreeSpeed;
+
+            if (speedAngle <= alertSpeedAngle) {
+                mProgressBarPaint.setColor(dialSpeedColor);
+                canvas.drawArc(progressBarRect, 0, speedAngle, false, mProgressBarPaint);
+            } else {
 //            mSpeedProgressPaint.setColor(Color.GREEN);
 //            canvas.drawArc(progressBarRect, 0, alertSpeedAngle, false, mSpeedProgressPaint);
 
-            mProgressBarPaint.setColor(dialSpeedAlertColor);
-            canvas.drawArc(progressBarRect, 0, speedAngle, false, mProgressBarPaint);
+                mProgressBarPaint.setColor(dialSpeedAlertColor);
+                canvas.drawArc(progressBarRect, 0, speedAngle, false, mProgressBarPaint);
+            }
         }
+
+
 
 
         //Rotate canvas again to write the text in correct orientation
@@ -337,6 +357,48 @@ public class KdGaugeView extends View {
         startProgressAnimation(mSpeed);
     }
 
+    public void initMultiColor(Canvas canvas, int[] colors, float[] changeAngles){
+
+        for(float angle: changeAngles){
+            if(angle>mMaxSpeed){
+                angle=mMaxSpeed;
+            }
+        }
+
+        float speedAngle = mCurrentSpeed / mPerDegreeSpeed;
+        float angleLeft = speedAngle;
+
+        for(int i=0; i<changeAngles.length; i++) {
+            float changeAngle = changeAngles[i];
+            int color = colors[i];
+
+            mAlertDotCirclePaint.setColor(color);
+            mProgressBarPaint.setColor(color);
+
+            canvas.drawCircle((float) (mCircleCenterX + mDotedCircleRadius * Math.cos(Math.toRadians(changeAngle))), (float) (mCircleCenterY + mDotedCircleRadius * Math.sin(Math.toRadians(changeAngle))), 6, mAlertDotCirclePaint);
+//            float speedAngle = mCurrentSpeed;
+
+            if((i-1)<0){
+                if(speedAngle<=changeAngle){
+                    canvas.drawArc(progressBarRect, mMinSpeed/mPerDegreeSpeed, angleLeft, false, mProgressBarPaint);
+                    break;
+                } else {
+                    canvas.drawArc(progressBarRect, mMinSpeed/mPerDegreeSpeed, changeAngle, false, mProgressBarPaint);
+                }
+                angleLeft = speedAngle - changeAngle;
+            } else {
+                if(speedAngle<=changeAngle){
+                    canvas.drawArc(progressBarRect, changeAngles[i-1], angleLeft, false, mProgressBarPaint);
+                    break;
+                } else {
+                    canvas.drawArc(progressBarRect, changeAngles[i-1], changeAngle-changeAngles[i-1], false, mProgressBarPaint);
+                }
+                angleLeft = speedAngle - changeAngle;
+            }
+            }
+        }
+
+
 
     @Override
     public void onWindowFocusChanged(boolean hasWindowFocus) {
@@ -359,5 +421,21 @@ public class KdGaugeView extends View {
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
         // onCreate() called
+    }
+
+    public int[] getColors() {
+        return colors;
+    }
+
+    public void setColors(int[] colors) {
+        this.colors = colors;
+    }
+
+    public float[] getChangeValues() {
+        return changeValues;
+    }
+
+    public void setChangeValues(float[] changeValues) {
+        this.changeValues = changeValues;
     }
 }
